@@ -1,4 +1,3 @@
-import hmac
 import sqlite3
 from contextlib import asynccontextmanager
 
@@ -7,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import database, initialize_database
 from app.schemas import UserCreate, UserLogin, UserResponse
+
+from app.bcrypt_integration import hash_password, verify_password
 
 
 @asynccontextmanager
@@ -51,7 +52,11 @@ def create_user(payload: UserCreate) -> dict[str, object]:
         with database() as connection:
             cursor = connection.execute(
                 "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
-                (payload.username, str(payload.email), payload.password),
+                (
+                    payload.username, 
+                    str(payload.email), 
+                       hash_password(payload.password) 
+                ),
             )
             user = connection.execute(
                 "SELECT * FROM users WHERE id = ?", (cursor.lastrowid,)
@@ -68,7 +73,8 @@ def login(payload: UserLogin) -> dict[str, object]:
             "SELECT * FROM users WHERE username = ?", (payload.username,)
         ).fetchone()
 
-    if user is None or not hmac.compare_digest(payload.password, user["password"]):
+   
+    if user is None or not verify_password(payload.password, user["password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Forkert brugernavn eller password",
